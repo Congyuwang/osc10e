@@ -2,7 +2,7 @@
  * hello.c
  *
  * Kernel module that communicates with /proc file system.
- * 
+ *
  * The makefile must be modified to compile this program.
  * Change the line "simple.o" to "hello.o"
  *
@@ -14,7 +14,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/proc_fs.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #define BUFFER_SIZE 128
 
@@ -57,10 +57,10 @@ static void proc_exit(void) {
 
 /**
  * This function is called each time the /proc/hello is read.
- * 
+ *
  * This function is called repeatedly until it returns 0, so
  * there must be logic that ensures it ultimately returns 0
- * once it has collected the data that is to go into the 
+ * once it has collected the data that is to go into the
  * corresponding /proc file.
  *
  * params:
@@ -83,7 +83,7 @@ static ssize_t proc_read(struct file *file, char __user *usr_buf, size_t count, 
 
         completed = 1;
 
-        rv = sprintf(buffer, "Hello World\n");
+        rv = sprintf(buffer, MESSAGE);
 
         // copies the contents of buffer to userspace usr_buf
         copy_to_user(usr_buf, buffer, rv);
