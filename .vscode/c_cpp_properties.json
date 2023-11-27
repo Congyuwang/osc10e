@@ -1,0 +1,36 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}",
+                "/usr/src/linux-headers-5.4.0-73-generic/include",
+                "/usr/src/linux-headers-5.4.0-73-generic/include/uapi",
+                "/usr/src/linux-headers-5.4.0-73-generic/include/generated",
+                "/usr/src/linux-headers-5.4.0-73-generic/arch/x86/include",
+                "/usr/src/linux-headers-5.4.0-73-generic/arch/x86/include/uapi",
+                "/usr/src/linux-headers-5.4.0-73-generic/arch/x86/include/generated"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "KBUILD_MODNAME=\"hello_module\""
+            ],
+            "intelliSenseMode": "clang-x64",
+            "browse": {
+                "path": [
+                    "${workspaceFolder}",
+                    "/usr/src/linux-headers-5.4.0-73-generic/include",
+                    "/usr/src/linux-headers-5.4.0-73-generic/mm",
+                    "/usr/src/linux-headers-5.4.0-73-generic/fs",
+                    "/usr/src/linux-headers-5.4.0-73-generic/kernel"
+                ],
+                "limitSymbolsToIncludedHeaders": true,
+                "databaseFilename": ""
+            },
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c89",
+            "cppStandard": "c++17"
+        }
+    ],
+    "version": 4
+}
