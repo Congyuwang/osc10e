@@ -1,8 +1,8 @@
 /**
  * simple.c
  *
- * A simple kernel module. 
- * 
+ * A simple kernel module.
+ *
  * To compile, run makefile by entering "make"
  *
  * Operating System Concepts - 10th Edition
@@ -12,17 +12,26 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/hash.h>
+#include <linux/gcd.h>
+#include <linux/jiffies.h>
+#include <linux/param.h>
 
 /* This function is called when the module is loaded. */
 static int simple_init(void)
 {
        printk(KERN_INFO "Loading Module\n");
+       printk(KERN_INFO "jiffies: %lu\n", jiffies);
+       printk(KERN_INFO "HZ: %u\n", HZ);
+       printk(KERN_INFO "GOLDEN_RATIO_PRIME: %llu\n", GOLDEN_RATIO_PRIME);
 
        return 0;
 }
 
 /* This function is called when the module is removed. */
 static void simple_exit(void) {
+       printk(KERN_INFO "jiffies: %lu\n", jiffies);
+       printk(KERN_INFO "gcd(3300, 24): %lu\n", gcd(3300, 24));
 	printk(KERN_INFO "Removing Module\n");
 }
 
