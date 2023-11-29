@@ -18,7 +18,15 @@
 #define __NO_HISOTRY_CMD_WARN "No commands in history.\n"
 
 int
-__exec(struct __parse_result* command);
+__exec(struct __parse_result* command)
+{
+  printf("%s\n", command->input);
+  struct __command* cmd;
+  for (cmd = command->commands._start; cmd < command->commands._end; cmd++) {
+    // TODO
+  }
+  return 0;
+}
 
 int
 main(void)
@@ -78,10 +86,5 @@ main(void)
     }
   }
   __free_parsed_result(&command);
-  return 0;
-}
-
-int __exec(struct __parse_result* command) {
-  printf("%s\n", command->input);
   return 0;
 }
