@@ -162,8 +162,11 @@ __free_parsed_result(struct __parse_result* parsed)
 void
 __debug_print_syn(struct __vec_syn* vec_syn);
 
+void
+__debug_print_parsed(struct __parse_result* parsed);
+
 struct __vec_syn
-__tokenize_stdin()
+__tokenize_stdin(char debug)
 {
   // init containers
   struct __vec_syn syn;
@@ -277,6 +280,9 @@ __tokenize_stdin()
         } else {
           free(args._start); // freed
         }
+        if (debug) {
+          __debug_print_syn(&syn);
+        }
         return syn;
 
       // should continue
@@ -333,11 +339,7 @@ struct __parse_result
 __parse_cmd(char debug)
 {
   // read from stdin
-  struct __vec_syn vec_syn = __tokenize_stdin();
-
-  if (debug) {
-    __debug_print_syn(&vec_syn);
-  }
+  struct __vec_syn vec_syn = __tokenize_stdin(debug);
 
   // init structs
   struct __parse_result result = __P_RESULT_INIT;
@@ -516,6 +518,10 @@ cleanup:
   }
   // free syn
   __free_vec_syn(&vec_syn);
+
+  if (debug) {
+    __debug_print_parsed(&result);
+  }
   return result;
 }
 
