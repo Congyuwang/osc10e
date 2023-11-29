@@ -197,13 +197,16 @@ __tokenize_stdin(char debug)
   for (;;) {
     int c = getchar();
 
-    if (c != EOF && c != __NEWLINE && c != __RETURN) {
+    if (c == EOF) {
+      exit(EXIT_SUCCESS);
+    }
+
+    if (c != __NEWLINE && c != __RETURN) {
       __VEC_INSERT(input, c);
     }
 
     // char insertion
     switch (c) {
-      case EOF:
       case __NEWLINE:
       case __RETURN:
         break;
@@ -283,7 +286,6 @@ __tokenize_stdin(char debug)
     // str / args insertions
     switch (c) {
       // should return
-      case EOF:
       case __NEWLINE:
       case __RETURN:
         if (!__VEC_EMPTY(str)) {
