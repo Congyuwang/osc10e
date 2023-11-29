@@ -123,6 +123,24 @@ __free_vec_syn(struct __vec_syn* vec_syn)
 }
 
 void
+__free_cmd(struct __command* cmd) {
+  if (cmd->_in_file != NULL) {
+    free(cmd->_in_file);
+  }
+  if (cmd->_out_file != NULL) {
+    free(cmd->_out_file);
+  }
+  char** args = cmd->args;
+  if (args != NULL) {
+    char** s;
+    for (s = args; *s != NULL; s++) {
+      free(*s);
+    }
+    free(args);
+  }
+}
+
+void
 __free_commands(struct __vec_command* commands)
 {
   if (commands->_start == NULL) {
@@ -130,19 +148,7 @@ __free_commands(struct __vec_command* commands)
   }
   struct __command* cmd;
   for (cmd = commands->_start; cmd < commands->_end; cmd++) {
-    if (cmd->_in_file != NULL) {
-      free(cmd->_in_file);
-    }
-    if (cmd->_out_file != NULL) {
-      free(cmd->_out_file);
-    }
-    char** args = cmd->args;
-    assert(args != NULL);
-    char** s;
-    for (s = args; *s != NULL; s++) {
-      free(*s);
-    }
-    free(args);
+    __free_cmd(cmd);
   }
   free(commands->_start);
 }
@@ -507,6 +513,8 @@ cleanup:
   }
   // free syn
   __free_vec_syn(&vec_syn);
+  // free cmd
+  __free_cmd(&this_command);
 
   if (debug) {
     __debug_print_parsed(&result);
