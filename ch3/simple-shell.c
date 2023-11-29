@@ -5,133 +5,83 @@
  * Copyright John Wiley & Sons - 2018
  */
 
-#include "utility.h"
+#include "parser.h"
 #include <stdio.h>
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define __AMPERSAND "&"
+// shell consts
 #define __EXIT_CMD "exit"
 #define __REDO_CMD "!!"
 #define __PROMPT "osh> "
-#define __NO_HISOTRY_CMD_WARN "No commands in history."
-#define __NULL_CMD                                                             \
-  {                                                                            \
-    NULL, NULL, NULL,                                                          \
-  }
-
-struct __command
-{
-  char in_background;
-  struct __vec_str args;
-};
-
-void
-__print_command(struct __command* history);
+#define __NO_HISOTRY_CMD_WARN "No commands in history.\n"
 
 int
-__fork_exec(struct __command* command);
+__exec(struct __parse_result* command);
 
 int
 main(void)
 {
-  int should_run = 1;
-
-  struct __command command = { 0, __NULL_CMD };
+  struct __parse_result command = __P_RESULT_INIT;
 
   for (;;) {
-
     // read args from stdin
     printf(__PROMPT);
     fflush(stdout);
-    struct __vec_str args = parse_stdin_cmd();
+    struct __parse_result parsed = __parse_cmd(0);
 
-    /**
-     * Memory management of args:
-     * It is cleared
-     */
+    // first check parse err
+    if (parsed._err != NULL) {
+      printf("error: %s\n", parsed._err);
+      __free_parsed_result(&parsed);
+      continue;
+    }
 
-    // check for exit
-    char** first = __VEC_FIRST(args);
-    if (first != NULL && strcmp(*first, __EXIT_CMD) == 0) {
+    // peek first
+    struct __command* first = __VEC_FIRST(parsed.commands);
+    if (first != NULL) {
+      assert(first->args != NULL && *first->args != NULL);
       // exit
-      free_vec_str(&args);
-      break;
-    }
-
-    // check for !!
-    char redo = first != NULL && strcmp(*first, __REDO_CMD) == 0;
-    if (redo) {
-      if (command.args._start != NULL) {
-        // print history command
-        printf(__PROMPT);
-        __print_command(&command);
-        fflush(stdout);
-      } else {
-        // found no history
-        printf(__NO_HISOTRY_CMD_WARN);
-        fflush(stdout);
+      if (strcmp(*first->args, __EXIT_CMD) == 0) {
+        __free_parsed_result(&parsed);
+        break;
       }
-      // args freed
-      free_vec_str(&args);
-    } else {
-      // clear history and store new command
-      // check for &
-      char** last = __VEC_LAST(args);
-      // move args
-      free_vec_str(&command.args);
-      command.args = args;
-      command.in_background = last != NULL && strcmp(*last, __AMPERSAND) == 0;
-      // ensure args end with NULL for execvp
-      if (command.in_background) {
-        free(*last);
-        *last = NULL;
+      // redo
+      if (strcmp(*first->args, __REDO_CMD) == 0) {
+        if (command.commands._start != NULL) {
+          printf(__PROMPT);
+          printf("%s\n", command.input);
+          fflush(stdout);
+        } else {
+          printf(__NO_HISOTRY_CMD_WARN);
+          fflush(stdout);
+        }
+        // free parsed, retain old command
+        __free_parsed_result(&parsed);
+      } else if (__VEC_EMPTY(parsed.commands)) {
+        // free parsed, retain old command
+        __free_parsed_result(&parsed);
       } else {
-        __VEC_INSERT(command.args, NULL);
+        // replace old command with new one
+        __free_parsed_result(&command);
+        command = parsed;
+        struct __parse_result empty = __P_RESULT_INIT;
+        parsed = empty;
       }
     }
-    // lifetime of args ends at the block (either freed, or moved)
+    // lifetime of parsed ended (moved or freed)
 
-    // fork
-    if (command.args._start != NULL) {
-      __fork_exec(&command);
+    if (command.commands._start != NULL) {
+      assert(command.input != NULL);
+      __exec(&command);
     }
   }
-
-  free_vec_str(&command.args);
-
+  __free_parsed_result(&command);
   return 0;
 }
 
-int
-__fork_exec(struct __command* command)
-{
-  int pid = fork();
-  if (pid == 0) {
-    int code = execvp(*command->args._start, command->args._start);
-    _exit(code);
-  } else if (pid > 0) {
-    // parent
-    if (!command->in_background) {
-      int status;
-      waitpid(pid, &status, 0);
-      printf("process %i exited with code  %i.\n", pid, status);
-      fflush(stdout);
-    }
-  } else {
-    // fatal error, directly exit
-    exit(-pid);
-  }
-}
-
-void
-__print_command(struct __command* history)
-{
-  char** cmd;
-  assert(*history->args._end == NULL);
-  for (cmd = history->args._start; cmd < history->args._end - 1; cmd++) {
-    printf("%s ", *cmd);
-  }
-  printf("\n");
+int __exec(struct __parse_result* command) {
+  printf("%s\n", command->input);
+  return 0;
 }
