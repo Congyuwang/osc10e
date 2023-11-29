@@ -31,9 +31,9 @@
   {                                                                            \
     type, data                                                                 \
   }
-#define __P_RESULT(_e, _bg, _vc)                                               \
+#define __P_RESULT(_e, _bg, _vc, _ip)                                          \
   {                                                                            \
-    _e, _bg, _vc                                                               \
+    _e, _bg, _vc, _ip                                                          \
   }
 #define __CMD_INIT                                                             \
   {                                                                            \
@@ -44,7 +44,7 @@
 #define __SYN_TO_FILE __SYN(__syn_to_file, __NULL_VEC)
 #define __SYN_FROM_FILE __SYN(__syn_from_file, __NULL_VEC)
 #define __SYN_AMPERSAND __SYN(__syn_ampersand, __NULL_VEC)
-#define __P_RESULT_INIT __P_RESULT(NULL, 0, __NULL_VEC)
+#define __P_RESULT_INIT __P_RESULT(NULL, 0, __NULL_VEC, NULL)
 #define __EXPECTING_ARGS 1
 #define __EXPECTING_IN_FILE 2
 #define __EXPECTING_OUT_FILE 3
@@ -75,6 +75,12 @@ struct __vec_syn
   struct __syn* _mem_end;
 };
 
+struct __user_input
+{
+  struct __vec_syn syn;
+  struct __str input;
+};
+
 struct __command
 {
   char* _in_file;  // nullable
@@ -94,6 +100,7 @@ struct __parse_result
   char* _err; // NULL if ok, check first
   char background;
   struct __vec_command commands;
+  char* input; // original input
 };
 
 void
@@ -123,7 +130,8 @@ __free_vec_syn(struct __vec_syn* vec_syn)
 }
 
 void
-__free_cmd(struct __command* cmd) {
+__free_cmd(struct __command* cmd)
+{
   if (cmd->_in_file != NULL) {
     free(cmd->_in_file);
   }
@@ -158,6 +166,9 @@ __free_parsed_result(struct __parse_result* parsed)
 {
   // the err string is static and should not be freed
   __free_commands(&parsed->commands);
+  if (parsed->input != NULL) {
+    free(parsed->input);
+  }
 }
 
 void
@@ -166,16 +177,18 @@ __debug_print_syn(struct __vec_syn* vec_syn);
 void
 __debug_print_parsed(struct __parse_result* parsed);
 
-struct __vec_syn
+struct __user_input
 __tokenize_stdin(char debug)
 {
   // init containers
   struct __vec_syn syn;
   struct __vec_str args;
   struct __str str;
+  struct __str input;
   __VEC_INIT(syn, __ARGS_INIT_SIZE);
   __VEC_INIT(args, __ARGS_INIT_SIZE);
   __VEC_INIT(str, __STR_INIT_SIZE);
+  __VEC_INIT(input, __STR_INIT_SIZE);
 
   // parser states
   char escape = 0;
@@ -183,6 +196,10 @@ __tokenize_stdin(char debug)
   // start to parse
   for (;;) {
     int c = getchar();
+
+    if (c != EOF && c != __NEWLINE && c != __RETURN) {
+      __VEC_INSERT(input, c);
+    }
 
     // char insertion
     switch (c) {
@@ -284,7 +301,9 @@ __tokenize_stdin(char debug)
         if (debug) {
           __debug_print_syn(&syn);
         }
-        return syn;
+        __VEC_INSERT(input, __END);
+        struct __user_input user_input = { syn, input };
+        return user_input;
 
       // should continue
       case __SPACE:
@@ -338,7 +357,8 @@ struct __parse_result
 __parse_cmd(char debug)
 {
   // read from stdin
-  struct __vec_syn vec_syn = __tokenize_stdin(debug);
+  struct __user_input user_input = __tokenize_stdin(debug);
+  struct __vec_syn vec_syn = user_input.syn;
 
   // init structs
   struct __parse_result result = __P_RESULT_INIT;
@@ -515,7 +535,8 @@ cleanup:
   __free_vec_syn(&vec_syn);
   // free cmd
   __free_cmd(&this_command);
-
+  // move input
+  result.input = user_input.input._start;
   if (debug) {
     __debug_print_parsed(&result);
   }
