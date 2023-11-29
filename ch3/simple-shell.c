@@ -59,9 +59,6 @@ main(void)
         }
         // free parsed, retain old command
         __free_parsed_result(&parsed);
-      } else if (__VEC_EMPTY(parsed.commands)) {
-        // free parsed, retain old command
-        __free_parsed_result(&parsed);
       } else {
         // replace old command with new one
         __free_parsed_result(&command);
@@ -69,6 +66,9 @@ main(void)
         struct __parse_result empty = __P_RESULT_INIT;
         parsed = empty;
       }
+    } else {
+      // empty commands, free parsed
+      __free_parsed_result(&parsed);
     }
     // lifetime of parsed ended (moved or freed)
 
