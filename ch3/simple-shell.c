@@ -17,15 +17,168 @@
 #define __PROMPT "osh> "
 #define __NO_HISOTRY_CMD_WARN "No commands in history.\n"
 
-int
+void
+dup_file_fd(const char* file, const char* file_mode, int io_fd)
+{
+  // open file
+  FILE* in_file = fopen(file, file_mode);
+  if (in_file == NULL) {
+    perror("open file");
+    _exit(EXIT_FAILURE);
+  }
+  // dup file fd
+  if (dup2(fileno(in_file), io_fd) == -1) {
+    perror("dup2 file");
+    _exit(EXIT_FAILURE);
+  }
+  // close file fd
+  if (close(fileno(in_file)) != 0) {
+    perror("close file");
+    _exit(EXIT_FAILURE);
+  }
+}
+
+int*
+__init_pipes(int total_proc)
+{
+  int* pipes = NULL;
+  int n_pipes = total_proc - 1;
+  if (n_pipes > 0) {
+    pipes = (int*)malloc(sizeof(int) * n_pipes * 2);
+    if (pipes == NULL) {
+      perror("malloc");
+      exit(EXIT_FAILURE);
+    }
+  }
+  // create pipes: [r/w r/w r/w ...]
+  int n;
+  int* p = pipes;
+  for (n = 0; n < n_pipes; n++) {
+    if (pipe(p) < 0) {
+      perror("failure creating pipe");
+      exit(EXIT_FAILURE);
+    }
+    p += 2;
+  }
+  return pipes;
+}
+
+void
+__close_pipes(int* pipes, int total_proc)
+{
+  int n;
+  int n_pipes = (total_proc - 1) * 2;
+  for (n = 0; n < n_pipes; n++) {
+    if (*pipes != -1) {
+      if (close(*pipes) != 0) {
+        perror("error close");
+        _exit(EXIT_FAILURE);
+      }
+      *pipes = -1;
+    }
+    pipes++;
+  }
+}
+
+int*
+__get_pipe(int* pipes, int n_proc, int total_proc, char read)
+{
+  int* read_pos = pipes + (n_proc - 1) * 2;
+  int* write_pos = read_pos + 3;
+  char can_read = 1 <= n_proc && n_proc <= (total_proc - 1);
+  char can_write = 0 <= n_proc && n_proc <= (total_proc - 2);
+  size_t readable = read && can_read;
+  size_t writable = !read && can_write;
+  return (int*)(readable * (size_t)read_pos + writable * (size_t)write_pos);
+}
+
+void
+__fork_child(struct __command* cmd,
+           int* pipes,
+           int n_proc,
+           int total_proc,
+           int* pids)
+{
+  int pid = fork();
+  if (pid < 0) {
+    perror("fork");
+    exit(EXIT_FAILURE);
+  }
+  if (pid == 0) {
+    // dup fd to stdin / stdout
+    if (cmd->_in_file != NULL) {
+      // use file as stdin
+      dup_file_fd(cmd->_in_file, "r", STDIN_FILENO);
+    } else {
+      // use pipe as stdin
+      int* pipe_in = __get_pipe(pipes, n_proc, total_proc, 1);
+      if (pipe_in != NULL) {
+        if (dup2(*pipe_in, STDIN_FILENO) == -1) {
+          perror("dup2 pipe");
+          _exit(EXIT_FAILURE);
+        }
+      }
+    }
+    if (cmd->_out_file != NULL) {
+      // use file as stdout
+      dup_file_fd(cmd->_out_file, "w", STDOUT_FILENO);
+    } else {
+      // use pipe as stdout
+      int* pipe_out = __get_pipe(pipes, n_proc, total_proc, 0);
+      if (pipe_out != NULL) {
+        if (dup2(*pipe_out, STDOUT_FILENO) == -1) {
+          perror("dup2 pipe");
+          _exit(EXIT_FAILURE);
+        }
+      }
+    }
+    // close all pipes fd after dup
+    __close_pipes(pipes, total_proc);
+    // execv
+    int code = execvp(*cmd->args, cmd->args);
+    perror("exec");
+    _exit(code);
+  } else {
+    // record pid
+    pids[n_proc] = pid;
+  }
+}
+
+/**
+ *
+*/
+void
 __exec(struct __parse_result* command)
 {
-  printf("%s\n", command->input);
+  int total_proc = __VEC_LEN(command->commands);
+
+  // alloc / open pipes, alloc pids
+  int* pipes = __init_pipes(total_proc);
+  int* pids = (int*)malloc(sizeof(int) * total_proc);
+
+  // fork child processes
   struct __command* cmd;
+  int n_proc = 0;
   for (cmd = command->commands._start; cmd < command->commands._end; cmd++) {
-    // TODO
+    __fork_child(cmd, pipes, n_proc, total_proc, pids);
+    n_proc++;
   }
-  return 0;
+
+  // close all pipes after finished forking
+  __close_pipes(pipes, total_proc);
+  free(pipes);
+
+  // wait for finish
+  if (!command->background) {
+    int status = 0;
+    int n;
+    for (n = 0; n < n_proc; n++) {
+      waitpid(*(pids + n), &status, 0);
+    }
+  }
+
+  // free memory
+  free(pids);
 }
 
 int
@@ -77,6 +230,7 @@ main(void)
     } else {
       // empty commands, free parsed
       __free_parsed_result(&parsed);
+      continue;
     }
     // lifetime of parsed ended (moved or freed)
 
