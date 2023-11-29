@@ -318,14 +318,12 @@ __tokenize_stdin(char debug)
             __VEC_INSERT(syn, __SYN_AMPERSAND);
             break;
           default:
-            // unreachable
-            exit(EXIT_FAILURE);
+            assert(0);
         }
         break;
 
       default:
-        // unreachable
-        exit(EXIT_FAILURE);
+        assert(0);
     }
   }
 }
@@ -365,7 +363,7 @@ __parse_cmd(char debug)
           case __syn_to_file:
             __P_ERR(result, "invalid syntax near `|`, `>` followed by `|`");
           case __syn_ampersand:
-            break; // unreachable
+            assert(0);
           case __syn_args: {
             assert(this_command.args != NULL);
             __VEC_INSERT(result.commands, this_command); // moved
@@ -387,8 +385,9 @@ __parse_cmd(char debug)
             __P_ERR(result, "invalid syntax near `>`, <` followed by `>`");
           case __syn_to_file:
             __P_ERR(result, "invalid syntax near `>`, double `>`");
-          case __syn_ampersand: // unreachable
-          case __syn_args:      // noop
+          case __syn_ampersand:
+            assert(0);
+          case __syn_args:
             break;
         }
         prev = __syn_to_file;
@@ -403,8 +402,9 @@ __parse_cmd(char debug)
             __P_ERR(result, "invalid syntax near `<`, double `<`");
           case __syn_to_file:
             __P_ERR(result, "invalid syntax near `<`, `>` followed by `<`");
-          case __syn_ampersand: // unreachable
-          case __syn_args:      // noop
+          case __syn_ampersand:
+            assert(0);
+          case __syn_args:
             break;
         }
         prev = __syn_from_file;
@@ -424,7 +424,7 @@ __parse_cmd(char debug)
           case __syn_to_file:
             __P_ERR(result, "invalid syntax near `&`, `>` followed by `&`");
           case __syn_ampersand:
-            break; // unreachable
+            assert(0);
           case __syn_args:
             result.background = 1;
             break;
@@ -435,16 +435,13 @@ __parse_cmd(char debug)
         switch (prev) {
           case __null_value:
           case __syn_pipe:
-            if (this_command.args != NULL) {
-              __P_ERR(result, "internal error, args already written!");
-            }
+            assert(this_command.args == NULL);
             this_command.args = syn->data._start;
             syn->data._start = NULL; // move args (char**)
             break;
           case __syn_from_file: {
             size_t arg_len = __VEC_LEN(syn->data);
-            assert(arg_len > 1); // ends with NULL + nonempty
-            if (arg_len > 2) {
+            if (arg_len != 2) {
               __P_ERR(result, "too many file args after `<`");
             }
             if (this_command._in_file != NULL) {
@@ -457,8 +454,7 @@ __parse_cmd(char debug)
           }
           case __syn_to_file: {
             size_t arg_len = __VEC_LEN(syn->data);
-            assert(arg_len > 1); // ends with NULL + nonempty
-            if (arg_len > 2) {
+            if (arg_len != 2) {
               __P_ERR(result, "too many file args after `>`");
             }
             if (this_command._out_file != NULL) {
@@ -470,15 +466,13 @@ __parse_cmd(char debug)
             break;
           }
           case __syn_ampersand:
-            break; // unreachable
           case __syn_args:
-            // unreachable
-            __P_ERR(result, "internal error, consecutive args");
+            assert(0);
         }
         prev = __syn_args;
         break;
       default:
-        exit(EXIT_FAILURE); // unreachable
+        assert(0);
     }
   }
 
