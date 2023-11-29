@@ -1,10 +1,3 @@
-/**
- * Simple shell interface program.
- *
- * Operating System Concepts - Tenth Edition
- * Copyright John Wiley & Sons - 2018
- */
-
 #include "utility.h"
 #include <assert.h>
 #include <stdio.h>
