@@ -125,6 +125,9 @@ __free_vec_syn(struct __vec_syn* vec_syn)
 void
 __free_commands(struct __vec_command* commands)
 {
+  if (commands->_start == NULL) {
+    return;
+  }
   struct __command* cmd;
   for (cmd = commands->_start; cmd < commands->_end; cmd++) {
     if (cmd->_in_file != NULL) {
@@ -147,9 +150,8 @@ __free_commands(struct __vec_command* commands)
 void
 __free_parsed_result(struct __parse_result* parsed)
 {
-  if (parsed->_err == NULL) {
-    __free_commands(&parsed->commands);
-  }
+  // the err string is static and should not be freed
+  __free_commands(&parsed->commands);
 }
 
 void
