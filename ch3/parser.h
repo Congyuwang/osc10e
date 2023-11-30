@@ -31,9 +31,9 @@
   {                                                                            \
     type, data                                                                 \
   }
-#define __P_RESULT(_e, _bg, _vc, _ip)                                          \
+#define __P_RESULT(_e, _bg, _vc)                                               \
   {                                                                            \
-    _e, _bg, _vc, _ip                                                          \
+    _e, _bg, _vc                                                               \
   }
 #define __CMD_INIT                                                             \
   {                                                                            \
@@ -44,7 +44,7 @@
 #define __SYN_TO_FILE __SYN(__syn_to_file, __NULL_VEC)
 #define __SYN_FROM_FILE __SYN(__syn_from_file, __NULL_VEC)
 #define __SYN_AMPERSAND __SYN(__syn_ampersand, __NULL_VEC)
-#define __P_RESULT_INIT __P_RESULT(NULL, 0, __NULL_VEC, NULL)
+#define __P_RESULT_INIT __P_RESULT(NULL, 0, __NULL_VEC)
 #define __EXPECTING_ARGS 1
 #define __EXPECTING_IN_FILE 2
 #define __EXPECTING_OUT_FILE 3
@@ -75,12 +75,6 @@ struct __vec_syn
   struct __syn* _mem_end;
 };
 
-struct __user_input
-{
-  struct __vec_syn syn;
-  struct __str input;
-};
-
 struct __command
 {
   char* _in_file;  // nullable
@@ -100,7 +94,6 @@ struct __parse_result
   char* _err; // NULL if ok, check first
   char background;
   struct __vec_command commands;
-  char* input; // original input
 };
 
 void
@@ -166,29 +159,24 @@ __free_parsed_result(struct __parse_result* parsed)
 {
   // the err string is static and should not be freed
   __free_commands(&parsed->commands);
-  if (parsed->input != NULL) {
-    free(parsed->input);
-  }
 }
 
 void
-__debug_print_syn(struct __vec_syn* vec_syn);
+__debug_print_syn(const struct __vec_syn* vec_syn);
 
 void
-__debug_print_parsed(struct __parse_result* parsed);
+__debug_print_parsed(const struct __parse_result* parsed);
 
-struct __user_input
+struct __vec_syn
 __tokenize_stdin(char debug)
 {
   // init containers
   struct __vec_syn syn;
   struct __vec_str args;
   struct __str str;
-  struct __str input;
   __VEC_INIT(syn, __ARGS_INIT_SIZE);
   __VEC_INIT(args, __ARGS_INIT_SIZE);
   __VEC_INIT(str, __STR_INIT_SIZE);
-  __VEC_INIT(input, __STR_INIT_SIZE);
 
   // parser states
   char escape = 0;
@@ -199,10 +187,6 @@ __tokenize_stdin(char debug)
 
     if (c == EOF) {
       exit(EXIT_SUCCESS);
-    }
-
-    if (c != __NEWLINE && c != __RETURN) {
-      __VEC_INSERT(input, c);
     }
 
     // char insertion
@@ -303,9 +287,7 @@ __tokenize_stdin(char debug)
         if (debug) {
           __debug_print_syn(&syn);
         }
-        __VEC_INSERT(input, __END);
-        struct __user_input user_input = { syn, input };
-        return user_input;
+        return syn;
 
       // should continue
       case __SPACE:
@@ -359,8 +341,7 @@ struct __parse_result
 __parse_cmd(char debug)
 {
   // read from stdin
-  struct __user_input user_input = __tokenize_stdin(debug);
-  struct __vec_syn vec_syn = user_input.syn;
+  struct __vec_syn vec_syn = __tokenize_stdin(debug);
 
   // init structs
   struct __parse_result result = __P_RESULT_INIT;
@@ -537,8 +518,6 @@ cleanup:
   __free_vec_syn(&vec_syn);
   // free cmd
   __free_cmd(&this_command);
-  // move input
-  result.input = user_input.input._start;
   if (debug) {
     __debug_print_parsed(&result);
   }
@@ -546,7 +525,7 @@ cleanup:
 }
 
 void
-__print_args(struct __vec_str args, char sep)
+__print_args(const struct __vec_str args, char sep)
 {
   char** cmd;
   assert(*(args._end - 1) == NULL);
@@ -559,7 +538,7 @@ __print_args(struct __vec_str args, char sep)
 }
 
 void
-__debug_print_syn(struct __vec_syn* vec_syn)
+__debug_print_syn(const struct __vec_syn* vec_syn)
 {
   struct __syn* syn;
   int cnt = 0;
@@ -588,7 +567,7 @@ __debug_print_syn(struct __vec_syn* vec_syn)
 }
 
 void
-__debug_print_parsed(struct __parse_result* parsed)
+__debug_print_parsed(const struct __parse_result* parsed)
 {
   printf("{\n");
   printf("  background: %i,\n", parsed->background);
@@ -605,16 +584,96 @@ __debug_print_parsed(struct __parse_result* parsed)
       if (cmd->_out_file != NULL) {
         printf("      out_file: %s,\n", cmd->_out_file);
       }
-      char** arg;
+      char** arg = cmd->args;
+      char* arg_s;
       int arg_cnt = 0;
-      for (arg = cmd->args; *arg != NULL; arg++) {
-        printf("      arg_%i: %s,\n", arg_cnt++, *arg);
-      }
+      for (;;) {
+        arg_s = *(arg++);
+        if (arg_s == NULL)
+          break;
+        printf("      arg_%i: %s,\n", arg_cnt++, arg_s);
+      };
       printf("    },\n");
     }
     printf("  ]\n");
   }
   printf("}\n");
+}
+
+void
+__print_arg_s(const char* arg)
+{
+  char c;
+  for(;;) {
+    c = *(arg++);
+    switch (c) {
+      case __END:
+        return;
+      case __NEWLINE:
+        printf("\\n");
+        break;
+      case __RETURN:
+        printf("\\r");
+        break;
+      case __SPACE:
+      case __PIPE:
+      case __FROM_FILE:
+      case __AMPERSAND:
+      case __TO_FILE:
+      case __ESC:
+        printf("\\%c", c);
+        break;
+      default:
+        printf("%c", c);
+        break;
+    }
+  };
+}
+
+void
+__print_parsed(const struct __parse_result* parsed)
+{
+  if (parsed->_err != NULL) {
+    printf("error: %s\n", parsed->_err);
+    return;
+  }
+  char should_add_pipe = 0;
+  struct __command* cmd;
+  for (cmd = parsed->commands._start; cmd < parsed->commands._end; cmd++) {
+    if (should_add_pipe) {
+      printf(" | ");
+    } else {
+      should_add_pipe = 1;
+    }
+    {
+      char should_add_space = 0;
+      char** arg = cmd->args;
+      char* arg_s;
+      for (;;) {
+        arg_s = *(arg++);
+        if (arg_s == NULL)
+          break;
+        if (should_add_space) {
+          printf(" ");
+        } else {
+          should_add_space = 1;
+        }
+        __print_arg_s(arg_s);
+      };
+    }
+    if (cmd->_in_file != NULL) {
+      printf(" < ");
+      __print_arg_s(cmd->_in_file);
+    }
+    if (cmd->_out_file != NULL) {
+      printf(" > ");
+      __print_arg_s(cmd->_out_file);
+    }
+  }
+  if (parsed->background) {
+    printf(" &");
+  }
+  printf("\n");
 }
 
 #endif

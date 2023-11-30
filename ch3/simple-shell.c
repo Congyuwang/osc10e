@@ -11,6 +11,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define __DEBUG 0
+
 // shell consts
 #define __EXIT_CMD "exit"
 #define __REDO_CMD "!!"
@@ -64,27 +66,24 @@ __init_pipes(int total_proc)
 }
 
 void
-__close_pipes(int* pipes, int total_proc)
+__close_pipes(const int* pipes, int total_proc)
 {
   int n;
   int n_pipes = (total_proc - 1) * 2;
   for (n = 0; n < n_pipes; n++) {
-    if (*pipes != -1) {
-      if (close(*pipes) != 0) {
-        perror("error close");
-        _exit(EXIT_FAILURE);
-      }
-      *pipes = -1;
+    if (close(*pipes) != 0) {
+      perror("error close");
+      _exit(EXIT_FAILURE);
     }
     pipes++;
   }
 }
 
-int*
-__get_pipe(int* pipes, int n_proc, int total_proc, char read)
+static inline const int*
+__get_pipe(const int* pipes, int n_proc, int total_proc, char read)
 {
-  int* read_pos = pipes + (n_proc - 1) * 2;
-  int* write_pos = read_pos + 3;
+  const int* read_pos = pipes + (n_proc - 1) * 2;
+  const int* write_pos = read_pos + 3;
   char can_read = 1 <= n_proc && n_proc <= (total_proc - 1);
   char can_write = 0 <= n_proc && n_proc <= (total_proc - 2);
   size_t readable = read && can_read;
@@ -93,8 +92,21 @@ __get_pipe(int* pipes, int n_proc, int total_proc, char read)
 }
 
 void
+dup_pipe(const int* pipes, int n_proc, int total_proc, char read, int io_fd)
+{
+  // use pipe as stdin
+  const int* p = __get_pipe(pipes, n_proc, total_proc, read);
+  if (p != NULL) {
+    if (dup2(*p, io_fd) == -1) {
+      perror("dup2 pipe");
+      _exit(EXIT_FAILURE);
+    }
+  }
+}
+
+void
 __fork_child(struct __command* cmd,
-           int* pipes,
+           const int* pipes,
            int n_proc,
            int total_proc,
            int* pids)
@@ -107,30 +119,14 @@ __fork_child(struct __command* cmd,
   if (pid == 0) {
     // dup fd to stdin / stdout
     if (cmd->_in_file != NULL) {
-      // use file as stdin
       dup_file_fd(cmd->_in_file, "r", STDIN_FILENO);
     } else {
-      // use pipe as stdin
-      int* pipe_in = __get_pipe(pipes, n_proc, total_proc, 1);
-      if (pipe_in != NULL) {
-        if (dup2(*pipe_in, STDIN_FILENO) == -1) {
-          perror("dup2 pipe");
-          _exit(EXIT_FAILURE);
-        }
-      }
+      dup_pipe(pipes, n_proc, total_proc, 1, STDIN_FILENO);
     }
     if (cmd->_out_file != NULL) {
-      // use file as stdout
       dup_file_fd(cmd->_out_file, "w", STDOUT_FILENO);
     } else {
-      // use pipe as stdout
-      int* pipe_out = __get_pipe(pipes, n_proc, total_proc, 0);
-      if (pipe_out != NULL) {
-        if (dup2(*pipe_out, STDOUT_FILENO) == -1) {
-          perror("dup2 pipe");
-          _exit(EXIT_FAILURE);
-        }
-      }
+      dup_pipe(pipes, n_proc, total_proc, 0, STDOUT_FILENO);
     }
     // close all pipes fd after dup
     __close_pipes(pipes, total_proc);
@@ -139,7 +135,7 @@ __fork_child(struct __command* cmd,
     perror("exec");
     _exit(code);
   } else {
-    // record pid
+    // parent: record pid
     pids[n_proc] = pid;
   }
 }
@@ -152,27 +148,31 @@ __exec(struct __parse_result* command)
 {
   int total_proc = __VEC_LEN(command->commands);
 
-  // alloc / open pipes, alloc pids
-  int* pipes = __init_pipes(total_proc);
+  // pids
   int* pids = (int*)malloc(sizeof(int) * total_proc);
 
-  // fork child processes
-  struct __command* cmd;
-  int n_proc = 0;
-  for (cmd = command->commands._start; cmd < command->commands._end; cmd++) {
-    __fork_child(cmd, pipes, n_proc, total_proc, pids);
-    n_proc++;
-  }
+  {
+    // alloc / open pipes, alloc pids
+    int* pipes = __init_pipes(total_proc);
 
-  // close all pipes after finished forking
-  __close_pipes(pipes, total_proc);
-  free(pipes);
+    // fork child processes
+    struct __command* cmd;
+    int n_proc = 0;
+    for (cmd = command->commands._start; cmd < command->commands._end; cmd++) {
+      __fork_child(cmd, pipes, n_proc, total_proc, pids);
+      n_proc++;
+    }
+
+    // close all pipes after finished forking
+    __close_pipes(pipes, total_proc);
+    free(pipes);
+  }
 
   // wait for finish
   if (!command->background) {
     int status = 0;
     int n;
-    for (n = 0; n < n_proc; n++) {
+    for (n = 0; n < total_proc; n++) {
       waitpid(*(pids + n), &status, 0);
     }
   }
@@ -190,7 +190,7 @@ main(void)
     // read args from stdin
     printf(__PROMPT);
     fflush(stdout);
-    struct __parse_result parsed = __parse_cmd(0);
+    struct __parse_result parsed = __parse_cmd(__DEBUG);
 
     // first check parse err
     if (parsed._err != NULL) {
@@ -212,7 +212,7 @@ main(void)
       if (strcmp(*first->args, __REDO_CMD) == 0) {
         if (command.commands._start != NULL) {
           printf(__PROMPT);
-          printf("%s\n", command.input);
+          __print_parsed(&command);
           fflush(stdout);
         } else {
           printf(__NO_HISOTRY_CMD_WARN);
@@ -235,7 +235,6 @@ main(void)
     // lifetime of parsed ended (moved or freed)
 
     if (command.commands._start != NULL) {
-      assert(command.input != NULL);
       __exec(&command);
     }
   }
