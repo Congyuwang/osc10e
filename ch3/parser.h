@@ -101,9 +101,11 @@ __free_vec_str(struct __vec_str* vec_str)
 {
   if (vec_str->_start != NULL) {
     char** p;
+    char* s;
     for (p = vec_str->_start; p < vec_str->_end; p++) {
-      if (*p != NULL) {
-        free(*p);
+      s = *p;
+      if (s != NULL) {
+        free(s);
       }
     }
     free(vec_str->_start);
@@ -113,11 +115,10 @@ __free_vec_str(struct __vec_str* vec_str)
 void
 __free_vec_syn(struct __vec_syn* vec_syn)
 {
+  assert(vec_syn->_start != NULL);
   struct __syn* s;
   for (s = vec_syn->_start; s < vec_syn->_end; s++) {
-    assert(s != NULL); // we don't directly move syn
-    struct __vec_str vec_str = s->data;
-    __free_vec_str(&vec_str);
+    __free_vec_str(&s->data);
   }
   free(vec_syn->_start);
 }
