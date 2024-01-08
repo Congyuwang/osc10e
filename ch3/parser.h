@@ -563,6 +563,8 @@ __debug_print_syn(const struct __vec_syn* vec_syn)
         __print_args(syn->data, ',');
         printf(")\n");
         break;
+      case __null_value:
+        break;
     }
   }
 }
